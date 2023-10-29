@@ -1,0 +1,144 @@
+---
+title: "midterm-simulation-project"
+author: "Parker Hicks"
+date: "2023-10-23"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(ggplot2)
+```
+
+## Set simulated data
+```{r}
+set.seed(1234)
+# PRS scores tend to be normally distributed
+EUR_scores <- rnorm(n=10000, mean=0, sd=2)
+AFR_scores <- rnorm(n=5000, mean=-1, sd=2)
+```
+
+### Merge data
+```{r}
+EUR_df <- data.frame(scores=EUR_scores, pop="EUR", stringsAsFactors=TRUE)
+AFR_df <- data.frame(scores=AFR_scores, pop="AFR", stringsAsFactors=TRUE)
+
+merged_pops <- rbind(EUR_df, AFR_df)
+```
+
+## Plot population scores
+```{r}
+population_scores_density <- ggplot(data=merged_pops, aes(x=scores, fill=pop)) +
+  geom_density(alpha=0.5) +
+  xlab("PRS") +
+  ggtitle("Density of PRS scores across simulated EUR and AFR populations")
+
+population_scores_histogram <- ggplot(data=merged_pops, aes(x=scores, fill=pop)) +
+  geom_histogram(binwidth=1, alpha=0.5) +
+  xlab("PRS") +
+  ggtitle("Absolute counts of PRS scores across simulated EUR and AFR populations")
+
+population_scores_density
+population_scores_histogram
+```
+PRS scores typically follow a normal distribution 
+
+
+RQ: How does boostrapping the mean difference from 1 sample compare to the computing the mean difference across many independent samples?
+
+```{r}
+set.seed(1234)
+
+B <- 10^4
+mean_differences <- numeric(B)
+for (i in 1:B) {
+  # Sample populations from a normal distribution
+  eur_pop <- rnorm(10000, mean=0, sd=2)
+  afr_pop <- rnorm(5000, mean=-1, sd=2)
+
+  # Get the top 15th percentiles from both distributions
+  eur_15th <- quantile(eur_pop, probs=c(0.85))
+  afr_15th <- quantile(afr_pop, probs=c(0.85))
+  
+  # Compute mean difference statistic
+  mean_diff <- mean(eur_pop[eur_pop > eur_15th]) - 
+    mean(afr_pop[afr_pop > afr_15th])
+  mean_differences[i] <- mean_diff
+}
+
+difference_samples_df <- data.frame(pop=1:B, pop_differences=mean_differences)
+```
+
+```{r}
+difference_samples_hist <- ggplot(data=difference_samples_df, aes(x=pop_differences)) +
+            geom_histogram(binwidth = 0.05)
+
+difference_samples_qq <- ggplot(data=difference_samples_df, aes(sample=pop_differences)) +
+          stat_qq() +
+          stat_qq_line()
+
+difference_samples_hist
+difference_samples_qq
+```
+
+## Subset populations by top 15th percentile
+```{r}
+# Subset population PRS scores
+EUR_15th <- quantile(EUR_df$scores, probs=c(0.85))
+AFR_15th <- quantile(AFR_df$scores, probs=c(0.85))
+
+EUR_topPercentile <- subset(EUR_df, scores >= EUR_15th)
+AFR_topPercentile <- subset(AFR_df, scores >= AFR_15th)
+```
+
+## Perform difference boostrap
+```{r}
+set.seed(1234)
+boostrap_difference <- function(sample1, sample2, iterations) {
+  boostrap_distribution <- numeric(iterations)
+  for (i in 1:iterations) {
+  x <- sample(sample1, length(sample1), replace=TRUE)
+  y <- sample(sample2, length(sample2), replace=TRUE)
+  boostrap_distribution[i] <- mean(x) - mean(y)
+  }
+  
+  return(boostrap_distribution)
+}
+
+B <- 10^4
+prs_difference_boot <- boostrap_difference(sample1=EUR_topPercentile$scores,
+                                      sample2=AFR_topPercentile$scores,
+                                      iterations=B
+                                      )
+difference_boot_df <- data.frame(pop=1:B, pop_differences=prs_difference_boot)
+```
+
+
+## Plot boostraped statistic
+```{r}
+difference_boot_hist <- ggplot(data=difference_boot_df, aes(x=pop_differences)) +
+            geom_histogram(binwidth = 0.05)
+
+difference_boot_qq <- ggplot(data=difference_boot_df, aes(sample=pop_differences)) +
+          stat_qq() +
+          stat_qq_line()
+
+difference_boot_hist
+difference_boot_qq
+```
+
+```{r}
+samples_var <- sd(difference_samples_df$pop_differences)^2
+boot_var <- sd(difference_boot_df$pop_differences)^2
+
+samples_var
+boot_var
+```
+
+
+## Perform t-test between sampled distribution and boostrap distribution
+```{r}
+t.test(x=difference_samples_df$pop_differences, y=difference_boot_df$pop_differences, alternative="two.sided", conf.level=0.95, paired=FALSE, var.equal=TRUE)
+```
+
