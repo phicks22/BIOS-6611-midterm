@@ -31,8 +31,7 @@ merged_pops <- rbind(EUR_df, AFR_df)
 ```{r}
 population_scores_density <- ggplot(data=merged_pops, aes(x=scores, fill=pop)) +
   geom_density(alpha=0.5) +
-  xlab("PRS") +
-  ggtitle("Density of PRS scores across simulated EUR and AFR populations")
+  xlab("PRS")
 
 population_scores_histogram <- ggplot(data=merged_pops, aes(x=scores, fill=pop)) +
   geom_histogram(binwidth=1, alpha=0.5) +
@@ -40,6 +39,11 @@ population_scores_histogram <- ggplot(data=merged_pops, aes(x=scores, fill=pop))
   ggtitle("Absolute counts of PRS scores across simulated EUR and AFR populations")
 
 population_scores_density
+ggsave(
+  "./imgs/population_scores_density.png",
+  plot = last_plot(),
+  dpi = 500,
+)
 population_scores_histogram
 ```
 PRS scores typically follow a normal distribution 
@@ -72,13 +76,19 @@ difference_samples_df <- data.frame(pop=1:B, pop_differences=mean_differences)
 
 ```{r}
 difference_samples_hist <- ggplot(data=difference_samples_df, aes(x=pop_differences)) +
-            geom_histogram(binwidth = 0.05)
+            geom_histogram(binwidth = 0.05) +
+            xlab("Difference of upper 15th percentile means")
 
 difference_samples_qq <- ggplot(data=difference_samples_df, aes(sample=pop_differences)) +
           stat_qq() +
           stat_qq_line()
 
 difference_samples_hist
+ggsave(
+  "./imgs/difference_samples_hist.png",
+  plot = last_plot(),
+  dpi = 500,
+)
 difference_samples_qq
 ```
 
@@ -118,27 +128,50 @@ difference_boot_df <- data.frame(pop=1:B, pop_differences=prs_difference_boot)
 ## Plot boostraped statistic
 ```{r}
 difference_boot_hist <- ggplot(data=difference_boot_df, aes(x=pop_differences)) +
-            geom_histogram(binwidth = 0.05)
+            geom_histogram(binwidth = 0.05) +
+            xlab("Difference of upper 15th percentile means")
 
 difference_boot_qq <- ggplot(data=difference_boot_df, aes(sample=pop_differences)) +
           stat_qq() +
           stat_qq_line()
 
 difference_boot_hist
+ggsave(
+  "./imgs/difference_boot_hist.png",
+  plot = last_plot(),
+  dpi = 500,
+)
 difference_boot_qq
 ```
 
 ```{r}
+samples_mean <- mean(difference_samples_df$pop_differences)
+boot_mean <- mean(difference_boot_df$pop_differences)
+
+samples_se <- sd(difference_samples_df$pop_differences)
+boot_se <- sd(difference_boot_df$pop_differences)
+
 samples_var <- sd(difference_samples_df$pop_differences)^2
 boot_var <- sd(difference_boot_df$pop_differences)^2
 
+samples_CI <- mean(difference_samples_df$pop_differences) + quantile(difference_samples_df$pop_differences, 0.05 / 2) * 2 / sqrt(length(difference_samples_df$pop_differences))
+boot_CI <- quantile( difference_boot_df$pop_differences, c(0.025,0.975))
+
+samples_mean
+boot_mean
+
+samples_se
+boot_se
+
 samples_var
 boot_var
+
+samples_CI
+boot_CI
 ```
 
-
-## Perform t-test between sampled distribution and boostrap distribution
+## Compute the bias of the boostrap estimator
 ```{r}
-t.test(x=difference_samples_df$pop_differences, y=difference_boot_df$pop_differences, alternative="two.sided", conf.level=0.95, paired=FALSE, var.equal=TRUE)
+bias <- mean(difference_boot_df$pop_differences) - mean(difference_samples_df$pop_differences)
+bias
 ```
-
